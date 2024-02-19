@@ -7,6 +7,7 @@ RUN apt-get install -y llvm-14-dev libclang-14-dev clang-14 \
 RUN apt install -y cmake ninja-build protobuf-compiler brotli \
     libicu-dev libbrotli-dev
 RUN apt-get install -y unzip jq nodejs npm python-is-python3
+RUN apt-get install -y binutils
 
 ENV GOPATH /go
 ENV PATH $GOPATH/bin:$PATH
@@ -18,6 +19,8 @@ COPY . ./
 RUN ./api/scripts/go_proto_gen.sh
 RUN make build
 RUN make build-envoy
+
+RUN strip ./bin/envoy
 
 FROM alpine:3.18
 
