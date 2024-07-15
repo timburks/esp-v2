@@ -577,6 +577,12 @@ environment variable or by passing "-k" flag to this script.
         connecting to Google service control. If it is `open`, the request will be allowed,
         otherwise, it will be rejected. Default is `open`.
         ''')
+    parser.add_argument('--service_control_enable_api_key_uid_reporting',
+        default=True,
+        action=argparse.BooleanOptionalAction,
+        help='''
+        Enable when need to report api_key_uid in the telemetry report.'''
+    )
     parser.add_argument(
         '--disable_jwks_async_fetch',
         action='store_true',
@@ -654,6 +660,13 @@ environment variable or by passing "-k" flag to this script.
         from ESPv2 (ie. Service Management, Instance Metadata Server, etc.).
         This timeout does not apply to requests proxied to the backend.
         Must be > 0 and the default is 30 seconds if not set.
+        ''')
+    parser.add_argument(
+        '--service_control_url',
+        default=None,
+        help='''
+        Set the url of service control server. The default is
+        "https://servicecontrol.googleapis.com" if not set.
         ''')
     parser.add_argument(
         '--service_control_check_timeout_ms',
@@ -1341,6 +1354,11 @@ def gen_proxy_config(args):
 
     if args.http_request_timeout_s:
         proxy_conf.extend( ["--http_request_timeout_s", str(args.http_request_timeout_s)])
+        
+    if args.service_control_url:
+        proxy_conf.extend([
+            "--service_control_url", args.service_control_url
+        ])
 
     if args.service_control_check_retries:
         proxy_conf.extend([
@@ -1382,6 +1400,9 @@ def gen_proxy_config(args):
     if args.service_control_network_fail_policy == "close":
         proxy_conf.extend(["--service_control_network_fail_open=false"])
 
+    if args.service_control_enable_api_key_uid_reporting:
+        proxy_conf.append("--service_control_enable_api_key_uid_reporting")
+        
     if args.service_json_path:
         proxy_conf.extend(["--service_json_path", args.service_json_path])
 

@@ -15,9 +15,10 @@ echo "Cleaning up resources before ${LIMIT_DATE}"
 
 # Set the project id
 PROJECT_IDS=("cloudesf-testing" "cloud-api-proxy-testing")
-REGIONS=("us-central1" "us-east1")
+REGIONS=("us-central1" "us-east1" "us-west1")
 for PROJECT in ${PROJECT_IDS[@]}; do
   for REGION in ${REGIONS[@]}; do
+    echo "-------------------------------------------"
     echo "cleaning up resources in ${REGION} for ${PROJECT}"
 
     gcloud config set project ${PROJECT}
@@ -70,8 +71,8 @@ for PROJECT in ${PROJECT_IDS[@]}; do
 
     ### App Engines ###
     APP_ENGINES=$(gcloud app services list \
-    --filter="SERVICE ~ ^e2e-test-" \
-    --format="value(SERVICE)")
+        --filter="SERVICE ~ ^e2e-test-" \
+      --format="value(SERVICE)")
     for ap in ${APP_ENGINES} ; do
       echo "Deleting App Engine: ${ap}"
       gcloud app services delete "${ap}" \
@@ -85,7 +86,7 @@ for PROJECT in ${PROJECT_IDS[@]}; do
     FIREWALL_RULES=$(gcloud compute firewall-rules list \
         --filter="targetTags:(gke-e2e-cloud-run) \
         AND creationTimestamp < ${LIMIT_DATE}" \
-        --format="value(name)")
+      --format="value(name)")
 
     for rule in $FIREWALL_RULES ; do
       echo "Deleting Firewall rule: ${rule}"
@@ -100,19 +101,19 @@ for PROJECT in ${PROJECT_IDS[@]}; do
 
     TARGET_POOLS=$(gcloud compute target-pools list \
         --regions="${REGION}" \
-        --format='value(name)')
+      --format='value(name)')
 
     for targetpool in $TARGET_POOLS; do
       echo "Query Forwarding Rule for target pool ${targetpool}"
       forwardingitem=$(gcloud compute forwarding-rules list \
-        --filter=TARGET="https://www.googleapis.com/compute/v1/projects/$PROJECT/regions/$REGION/targetPools/$targetpool" \
+          --filter=TARGET="https://www.googleapis.com/compute/v1/projects/$PROJECT/regions/$REGION/targetPools/$targetpool" \
         --format='value(name)')
-        if [[ -z "$forwardingitem" ]]; then
-          echo "Deleting unused target pool ${targetpool}"
-          gcloud compute target-pools delete "${targetpool}" \
-            --region="${REGION}" \
-            --quiet
-        fi
+      if [[ -z "$forwardingitem" ]]; then
+        echo "Deleting unused target pool ${targetpool}"
+        gcloud compute target-pools delete "${targetpool}" \
+          --region="${REGION}" \
+          --quiet
+      fi
     done
     echo "Done cleaning up target pools without forwarding rules"
 
@@ -122,14 +123,13 @@ for PROJECT in ${PROJECT_IDS[@]}; do
 
     TARGET_POOLS=$(gcloud compute target-pools list \
         --regions="${REGION}" \
-        --filter="instances:(gke-e2e-cloud-run) \
-        AND creationTimestamp < ${LIMIT_DATE}" \
-        --format='value(name)')
+        --filter="creationTimestamp < ${LIMIT_DATE}" \
+      --format='value(name)')
 
     for targetpool in $TARGET_POOLS; do
       echo "Detected cloud run target pool ${targetpool}, querying forwarding rule"
       forwardingitem=$(gcloud compute forwarding-rules list \
-        --filter=TARGET="https://www.googleapis.com/compute/v1/projects/$PROJECT/regions/$REGION/targetPools/$targetpool" \
+          --filter=TARGET="https://www.googleapis.com/compute/v1/projects/$PROJECT/regions/$REGION/targetPools/$targetpool" \
         --format='value(name)')
       echo "Deleting forwarding rule ${forwardingitem}"
       gcloud compute forwarding-rules delete "${forwardingitem}" \
@@ -137,6 +137,25 @@ for PROJECT in ${PROJECT_IDS[@]}; do
         --quiet
     done
     echo "Done cleaning up forwarding rules"
+
+    ### Target Pools ###
+    # Clean up all target pools that were created older than 1 day
+    for targetpool in $TARGET_POOLS; do
+      echo "Deleting target pool ${targetpool}"
+      gcloud compute target-pools delete $targetpool --region $REGION --quiet
+    done
+    echo "Done cleaning up target pools"
+
+    ### Static IPs ###
+    # Clean up static IPs that are reserved 1 day ago but not in use.
+    STATIC_IPS=$(gcloud compute addresses list \
+        --filter="status=RESERVED AND creationTimestamp < ${LIMIT_DATE}" \
+        --regions="${REGION}" \
+      --format="value(name)")
+    for static_ip in $STATIC_IPS; do
+      gcloud compute addresses delete ${static_ip} --region $REGION --quiet
+    done
+    echo "Done cleaning up unused static ips"
 
     ### Endpoints Services ###
     ENDPOINTS_SERVICES=$(gcloud endpoints services list \
@@ -176,4 +195,5 @@ for PROJECT in ${PROJECT_IDS[@]}; do
     echo "Done cleaning up Endpoints Services"
   done
 done
-
+echo "-------------------------------------------"
+echo "All Completed!"
